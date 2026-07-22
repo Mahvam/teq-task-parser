@@ -1,27 +1,35 @@
 # TEQ Connect Task Parser
 
-Simple Flask app to upload a PDF, extract job positions and tasks, and download results.
+A Python + Flask web app built to eliminate a manual data entry bottleneck at an enterprise mining client.
 
-Usage
+## The Problem
 
-1. Install dependencies:
+Every week, Hecla Mining emailed a PDF containing updated job task descriptions. Someone had to manually read through it and type every position, task, and importance level into a spreadsheet by hand — a slow, error-prone process.
 
-```bash
-python -m pip install -r requirements.txt
-```
+## The Solution
 
-2. (Optional) Set your Anthropic API key to enable Claude parsing:
+I built an internal tool that automates the entire workflow:
 
-```bash
-export ANTHROPIC_API_KEY=your_key_here
-```
+1. Upload the PDF through a simple web interface
+2. Claude AI (Anthropic API) reads and extracts the structured data
+3. Results are displayed in a clean table instantly
+4. Download as Excel or CSV with one click
 
-3. Run the app:
+No more manual data entry. No more typos. One click instead of an hour of work.
 
-```bash
-python app.py
-```
+## Tech Stack
 
-4. Open http://127.0.0.1:5000 in your browser.
+- **Python + Flask** — backend web app
+- **Claude AI (Anthropic API)** — intelligent PDF extraction
+- **pdfplumber + PyPDF2** — PDF reading
+- **openpyxl** — Excel file generation
+- **HTML/CSS** — simple browser-based interface
 
-If Anthropic isn't configured the app will use a local regex-based fallback parser.
+## Project Status
+
+- ✅ Phase 1 — PDF upload, AI extraction, Excel/CSV export (complete)
+- 🔄 Phase 2 — Google Sheets integration with duplicate detection on weekly imports (in progress)
+
+## Why I Built This
+
+I'm a Customer Success Manager who identified a recurring operational pain point with a client and built a solution instead of waiting for one. This project reflects my approach to CS: find the friction, eliminate it, and make the process scalable.
