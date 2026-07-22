@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>TEQ Connect Task Parser</title>
+    <style>
+      body{font-family: Arial, sans-serif;max-width:900px;margin:40px auto;color:#222}
+      h1{font-size:22px}
+      .upload{margin:20px 0}
+      table{border-collapse:collapse;width:100%;margin-top:20px}
+      th,td{border:1px solid #ddd;padding:8px;text-align:left}
+      th{background:#f4f4f4}
+      .actions{margin-top:12px}
+      .btn{display:inline-block;padding:8px 12px;margin-right:8px;background:#1976d2;color:white;border-radius:4px;text-decoration:none}
+    </style>
+  </head>
+  <body>
+    <h1>TEQ Connect Task Parser</h1>
+    <p>Upload a PDF with job positions and task bullets (optionally with importance in parentheses).</p>
+    <form class="upload" action="/upload" method="post" enctype="multipart/form-data">
+      <input type="file" name="file" accept="application/pdf" required>
+      <button type="submit" class="btn">Upload & Parse</button>
+    </form>
+
+    {% if results is defined %}
+      {% if results|length == 0 %}
+        <p><em>No tasks found in the uploaded PDF.</em></p>
+      {% endif %}
+      <div class="actions">
+        <a class="btn" href="/download/xlsx/{{ uid }}">Download Excel (xlsx)</a>
+        <a class="btn" href="/download/csv/{{ uid }}">Download CSV (Google Sheets)</a>
+      </div>
+      <table>
+        <thead>
+          <tr><th>Position</th><th>Task</th><th>Importance Level</th></tr>
+        </thead>
+        <tbody>
+          {% for r in results %}
+            <tr>
+              <td>{{ r.position }}</td>
+              <td>{{ r.task }}</td>
+              <td>{{ r.importance }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+
+  </body>
+</html>
