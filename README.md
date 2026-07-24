@@ -28,7 +28,7 @@ No more manual data entry. No more typos. One click instead of an hour of work.
 ## Project Status
 
 - ✅ Phase 1 — PDF upload, AI extraction, Excel/CSV export (complete)
-- 🔄 Phase 2 — Google Sheets integration with duplicate detection on weekly imports (in progress)
+- ✅ Phase 2 — Google Sheets integration with duplicate detection on weekly imports (complete)
 
 ## Why I Built This
 
