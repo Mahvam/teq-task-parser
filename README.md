@@ -4,7 +4,7 @@ A Python + Flask web app built to eliminate a manual data entry bottleneck at an
 
 ## The Problem
 
-Every week, Hecla Mining emailed a PDF containing updated job task descriptions. Someone had to manually read through it and type every position, task, and importance level into a spreadsheet by hand — a slow, error-prone process.
+Every week, an enterprise customer emailed a PDF containing updated job task descriptions. Someone had to manually read through it and type every position, task, and importance level into a spreadsheet by hand — a slow, error-prone process.
 
 ## The Solution
 
