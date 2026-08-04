@@ -56,11 +56,13 @@ def get_sheet():
     if gspread is None:
         log.warning('gspread not installed.')
         return None
-    if not CREDENTIALS_FILE.exists():
-        log.warning('credentials.json not found.')
-        return None
     try:
-        creds = Credentials.from_service_account_file(str(CREDENTIALS_FILE), scopes=SCOPES)
+        creds_json = os.environ.get('GOOGLE_CREDENTIALS_JSON')
+        if creds_json:
+            creds_info = json.loads(creds_json)
+            creds = Credentials.from_service_account_info(creds_info, scopes=SCOPES)
+        else:
+            creds = Credentials.from_service_account_file(str(CREDENTIALS_FILE), scopes=SCOPES)
         client = gspread.authorize(creds)
         sheet = client.open_by_key(SHEET_ID).sheet1
         log.info('Connected to Google Sheet successfully.')
