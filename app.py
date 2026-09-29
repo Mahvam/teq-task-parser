@@ -8,7 +8,26 @@ import logging
 from tempfile import gettempdir
 from pathlib import Path
 
-from flask import Flask, request, render_template, redirect, url_for, send_file
+try:
+    from flask import Flask, request, render_template, redirect, url_for, send_file
+    app = Flask(__name__)
+except Exception:
+    Flask = None
+    request = None
+    def render_template(*a, **k):
+        return ''
+    def redirect(*a, **k):
+        return ''
+    def url_for(*a, **k):
+        return ''
+    def send_file(*a, **k):
+        return None
+    class _DummyApp:
+        def route(self, *a, **k):
+            def deco(f):
+                return f
+            return deco
+    app = _DummyApp()
 
 try:
     from dotenv import load_dotenv
@@ -37,7 +56,6 @@ try:
 except Exception:
     gspread = None
 
-app = Flask(__name__)
 
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 log = logging.getLogger('teq-parser')
@@ -50,12 +68,19 @@ RESULTS = {}
 SHEET_ID = '1FKV8SHFGWNslp4zxaQC1mgyYVRRt-dNrCOIcPvVOgys'
 CREDENTIALS_FILE = Path(__file__).parent / 'credentials.json'
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
+SHEET_SYNC_ERROR_MESSAGE = (
+    'Sheet sync failed. Nothing was added to the Google Sheet. Please try again.'
+)
+
+
+class SheetSyncError(Exception):
+    """Google Sheet sync could not finish safely, so no rows should be written."""
 
 
 def get_sheet():
     if gspread is None:
         log.warning('gspread not installed.')
-        return None
+        raise SheetSyncError('gspread not installed.')
     try:
         creds_json = os.environ.get('GOOGLE_CREDENTIALS_JSON')
         if creds_json:
@@ -67,18 +92,22 @@ def get_sheet():
         sheet = client.open_by_key(SHEET_ID).sheet1
         log.info('Connected to Google Sheet successfully.')
         return sheet
+    except SheetSyncError:
+        raise
     except Exception as e:
         log.error('Could not connect to Google Sheet: %s', e)
-        return None
+        raise SheetSyncError('Could not connect to Google Sheet.') from e
 
 
 def get_existing_tasks(sheet):
     try:
         rows = sheet.get_all_values()
         return {(r[0].strip().lower(), r[1].strip().lower()) for r in rows[1:] if len(r) >= 2}
+    except SheetSyncError:
+        raise
     except Exception as e:
         log.error('Could not read sheet: %s', e)
-        return set()
+        raise SheetSyncError('Could not read sheet.') from e
 
 
 def append_new_tasks(sheet, new_rows):
@@ -86,8 +115,11 @@ def append_new_tasks(sheet, new_rows):
         values = [[r['position'], r['task'], r['importance']] for r in new_rows]
         sheet.append_rows(values, value_input_option='RAW')
         log.info('Appended %d new tasks to Google Sheet.', len(new_rows))
+    except SheetSyncError:
+        raise
     except Exception as e:
         log.error('Could not append to sheet: %s', e)
+        raise SheetSyncError('Could not append to sheet.') from e
 
 
 def filter_new_rows(rows, existing_tasks):
@@ -137,17 +169,35 @@ def clean_position(chunk):
 
 
 def parse_text_fallback(text):
-    raw = " ".join(text.split())
+    # keep newlines to help locate nearby headers, but normalize spacing
     results = []
-    responsibility_matches = list(re.finditer(r'Responsibilities:', raw, flags=re.IGNORECASE))
+    # find all places where a "Responsibilities:" section starts
+    responsibility_matches = list(re.finditer(r'Responsibilities:', text, flags=re.IGNORECASE))
     positions = []
-    prev_end = 0
     for match in responsibility_matches:
-        position_text = clean_position(raw[prev_end:match.start()])
+        # look back a short distance to capture only the immediate heading/title
+        start_ctx = max(0, match.start() - 240)
+        before = text[start_ctx:match.start()]
+        before_norm = ' '.join(before.split())
+        # common header pattern: "<Job Title> Position" before "Responsibilities:"
+        m_pos = re.search(r'([A-Za-z0-9 &,\-/]{2,80})\s+Position\s*$', before_norm)
+        if m_pos:
+            position_text = m_pos.group(1).strip()
+        else:
+            # fallback: take the last capitalized chunk (likely the job title)
+            m_cap = re.search(r'([A-Z][A-Za-z0-9 &,\-/]{1,60})\s*$', before_norm)
+            if m_cap:
+                position_text = m_cap.group(1).strip()
+            else:
+                # last resort: use clean_position on the short context
+                position_text = clean_position(before_norm)
         if position_text:
             positions.append((match.start(), position_text))
-        prev_end = match.end()
-    for task_match in re.finditer(r'•\s*([^•]+?)(?=(?:•|$))', raw):
+
+    # Match bullets but stop before either the next bullet OR a new position header
+    # Lookahead includes a capitalized header followed by "Responsibilities:"
+    task_pattern = re.compile(r'•\s*([^•]+?)(?=(?:•|\s+[A-Z][A-Za-z0-9 &,\-\/]{0,80}\s+Responsibilities:|$))', flags=re.DOTALL)
+    for task_match in task_pattern.finditer(text):
         task_text = task_match.group(1).strip()
         importance = 'neutral'
         m_dash = re.search(r'\s*-\s*(' + IMPORTANCE_WORDS + r')\s*$', task_text, re.IGNORECASE)
@@ -159,13 +209,20 @@ def parse_text_fallback(text):
             if m_paren:
                 importance = m_paren.group(1).lower()
                 task_text = task_text[:m_paren.start()].strip()
+
+        # determine which position this task belongs to by nearest preceding position start
         position_name = 'Unknown'
         for pos_start, pos_text in positions:
             if pos_start < task_match.start():
                 position_name = pos_text
             else:
                 break
-        results.append({'position': position_name, 'task': task_text, 'importance': importance})
+        # final cleanup: collapse whitespace and strip stray punctuation
+        task_text = ' '.join(task_text.split()).strip(' -–—:|')
+        if importance not in VALID_IMPORTANCE:
+            importance = 'neutral'
+        if task_text:
+            results.append({'position': position_name, 'task': task_text, 'importance': importance})
     return results
 
 
@@ -286,16 +343,16 @@ def upload():
 
     rows, method = parse_text(text)
 
-    sheet = get_sheet()
-    new_rows = rows
-    skipped = 0
-    if sheet:
+    try:
+        sheet = get_sheet()
         existing = get_existing_tasks(sheet)
         new_rows = filter_new_rows(rows, existing)
         skipped = len(rows) - len(new_rows)
         if new_rows:
             append_new_tasks(sheet, new_rows)
         log.info('Phase 2: %d new, %d duplicate(s) skipped.', len(new_rows), skipped)
+    except SheetSyncError:
+        return render_template('index.html', error=SHEET_SYNC_ERROR_MESSAGE)
 
     xlsx_path = tmpdir / f'{uid}.xlsx'
     csv_path = tmpdir / f'{uid}.csv'

@@ -13,6 +13,7 @@
       th{background:#f4f4f4}
       .actions{margin-top:12px}
       .btn{display:inline-block;padding:8px 12px;margin-right:8px;background:#1976d2;color:white;border-radius:4px;text-decoration:none}
+      .error{margin:16px 0;padding:12px 14px;background:#fdecea;border:1px solid #f5c2c0;border-radius:4px;color:#8a1f17}
     </style>
   </head>
   <body>
@@ -22,6 +23,10 @@
       <input type="file" name="file" accept="application/pdf" required>
       <button type="submit" class="btn">Upload & Parse</button>
     </form>
+
+    {% if error is defined and error %}
+      <p class="error" role="alert">{{ error }}</p>
+    {% endif %}
 
     {% if results is defined %}
       {% if results|length == 0 %}
